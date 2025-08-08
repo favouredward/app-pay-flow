@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Calendar, CreditCard, CheckCircle } from "lucide-react";
+import { ArrowLeft, Download, Calendar, CreditCard, CheckCircle, XCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +28,7 @@ const PaymentHistory = () => {
         const parsedApplicationData = JSON.parse(storedApplicationData);
         setApplicationData(parsedApplicationData);
 
-        // Fetch payments for this application
+        // Fetch ALL payments for this application (including pending and failed)
         const { data: payments, error } = await supabase
           .from('payments')
           .select('*')
@@ -38,6 +39,7 @@ const PaymentHistory = () => {
           console.error('Error fetching payments:', error);
           toast.error('Failed to fetch payment history');
         } else {
+          console.log('Fetched payments:', payments);
           setPaymentHistory(payments || []);
         }
       } catch (error) {
@@ -69,6 +71,54 @@ const PaymentHistory = () => {
     .reduce((sum, p) => sum + Number(p.amount_paid), 0);
 
   const remainingBalance = 40000 - totalPaid;
+
+  const getPaymentIcon = (status: string) => {
+    switch (status) {
+      case 'success':
+        return CheckCircle;
+      case 'failed':
+        return XCircle;
+      case 'pending':
+      default:
+        return Clock;
+    }
+  };
+
+  const getPaymentColor = (status: string) => {
+    switch (status) {
+      case 'success':
+        return 'text-success';
+      case 'failed':
+        return 'text-destructive';
+      case 'pending':
+      default:
+        return 'text-warning';
+    }
+  };
+
+  const getPaymentBgColor = (status: string) => {
+    switch (status) {
+      case 'success':
+        return 'bg-success/10';
+      case 'failed':
+        return 'bg-destructive/10';
+      case 'pending':
+      default:
+        return 'bg-warning/10';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'success':
+        return 'Successful';
+      case 'failed':
+        return 'Failed';
+      case 'pending':
+      default:
+        return 'Pending';
+    }
+  };
 
   if (isLoading) {
     return (
@@ -113,7 +163,7 @@ const PaymentHistory = () => {
                   <div className="text-2xl font-bold text-foreground">
                     {paymentHistory.filter(p => p.payment_status === 'success').length}
                   </div>
-                  <div className="text-sm text-muted-foreground">Payments Made</div>
+                  <div className="text-sm text-muted-foreground">Successful Payments</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-success">₦{totalPaid.toLocaleString()}</div>
@@ -145,70 +195,69 @@ const PaymentHistory = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {paymentHistory.map((payment, index) => (
-                <Card key={payment.id} className="animate-slide-up" style={{animationDelay: `${index * 0.1}s`}}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          payment.payment_status === 'success' 
-                            ? 'bg-success/10' 
-                            : payment.payment_status === 'pending' 
-                              ? 'bg-warning/10' 
-                              : 'bg-destructive/10'
-                        }`}>
-                          <CheckCircle className={`w-6 h-6 ${
-                            payment.payment_status === 'success' 
-                              ? 'text-success' 
-                              : payment.payment_status === 'pending' 
-                                ? 'text-warning' 
-                                : 'text-destructive'
-                          }`} />
+              {paymentHistory.map((payment, index) => {
+                const PaymentIcon = getPaymentIcon(payment.payment_status);
+                return (
+                  <Card key={payment.id} className="animate-slide-up" style={{animationDelay: `${index * 0.1}s`}}>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${getPaymentBgColor(payment.payment_status)}`}>
+                            <PaymentIcon className={`w-6 h-6 ${getPaymentColor(payment.payment_status)}`} />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">
+                              Monthly Payment ({payment.months_paid_for} month{payment.months_paid_for > 1 ? 's' : ''})
+                            </h3>
+                            <p className="text-sm text-muted-foreground flex items-center gap-2">
+                              <Calendar className="w-4 h-4" />
+                              {new Date(payment.payment_date || payment.created_at).toLocaleDateString()}
+                            </p>
+                            <p className={`text-xs font-medium ${getPaymentColor(payment.payment_status)}`}>
+                              Status: {getStatusText(payment.payment_status)}
+                            </p>
+                            {payment.paystack_reference && (
+                              <p className="text-xs text-muted-foreground">
+                                Ref: {payment.paystack_reference}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold">
-                            Monthly Payment ({payment.months_paid_for} month{payment.months_paid_for > 1 ? 's' : ''})
-                          </h3>
-                          <p className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Calendar className="w-4 h-4" />
-                            {new Date(payment.payment_date || payment.created_at).toLocaleDateString()}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Status: {payment.payment_status}
-                          </p>
+                        <div className="text-right">
+                          <div className={`font-bold ${
+                            payment.payment_status === 'success' ? 'text-success' : 
+                            payment.payment_status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
+                          }`}>
+                            ₦{Number(payment.amount_paid).toLocaleString()}
+                          </div>
+                          {payment.payment_status === 'success' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownloadReceipt(payment)}
+                              className="text-primary hover:text-primary/80"
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              Receipt
+                            </Button>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className={`font-bold ${
-                          payment.payment_status === 'success' ? 'text-success' : 'text-muted-foreground'
-                        }`}>
-                          ₦{Number(payment.amount_paid).toLocaleString()}
-                        </div>
-                        {payment.payment_status === 'success' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownloadReceipt(payment)}
-                            className="text-primary hover:text-primary/80"
-                          >
-                            <Download className="w-4 h-4 mr-1" />
-                            Receipt
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
-          {/* Action Button */}
-          <div className="text-center">
-            <Button onClick={handleMakePayment} className="btn-primary">
-              {paymentHistory.length > 0 ? "Make Another Payment" : "Make Your First Payment"}
-            </Button>
-          </div>
+          {/* Action Button - Only show if there are successful payments or no payments at all */}
+          {(paymentHistory.length === 0 || paymentHistory.some(p => p.payment_status === 'success')) && (
+            <div className="text-center">
+              <Button onClick={handleMakePayment} className="btn-primary">
+                {paymentHistory.filter(p => p.payment_status === 'success').length > 0 ? "Make Another Payment" : "Make Your First Payment"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       <Footer />

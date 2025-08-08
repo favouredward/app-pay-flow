@@ -112,7 +112,9 @@ serve(async (req) => {
         const months = paystackData.data.metadata?.months || 1
         
         if (applicationId) {
-          // Update payment status
+          console.log('Updating payment status for reference:', reference);
+          
+          // Update payment status to success
           const { error: updateError } = await supabaseClient
             .from('payments')
             .update({ 
@@ -123,9 +125,11 @@ serve(async (req) => {
 
           if (updateError) {
             console.error('Error updating payment:', updateError)
+          } else {
+            console.log('Payment status updated successfully');
           }
 
-          // Update application payment status
+          // Fetch all successful payments for this application to calculate totals
           const { data: payments, error: paymentsError } = await supabaseClient
             .from('payments')
             .select('*')
@@ -136,6 +140,8 @@ serve(async (req) => {
             const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount_paid), 0)
             const monthsPaid = payments.reduce((sum, p) => sum + p.months_paid_for, 0)
             
+            console.log('Calculated totals:', { totalPaid, monthsPaid });
+            
             let paymentStatus = 'unpaid'
             if (monthsPaid >= 4) {
               paymentStatus = 'fully_paid'
@@ -143,6 +149,9 @@ serve(async (req) => {
               paymentStatus = 'partially_paid'
             }
 
+            console.log('Updating application with status:', paymentStatus);
+
+            // Update application with payment totals and status
             const { error: appUpdateError } = await supabaseClient
               .from('applications')
               .update({
@@ -154,6 +163,8 @@ serve(async (req) => {
 
             if (appUpdateError) {
               console.error('Error updating application:', appUpdateError)
+            } else {
+              console.log('Application updated successfully');
             }
           }
         }
@@ -170,6 +181,19 @@ serve(async (req) => {
           }
         )
       } else {
+        // Payment failed - update status to failed
+        const { error: updateError } = await supabaseClient
+          .from('payments')
+          .update({ 
+            payment_status: 'failed',
+            payment_date: new Date().toISOString()
+          })
+          .eq('paystack_reference', reference)
+
+        if (updateError) {
+          console.error('Error updating failed payment:', updateError)
+        }
+
         return new Response(
           JSON.stringify({ 
             success: false, 

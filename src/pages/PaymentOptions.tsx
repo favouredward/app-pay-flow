@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, Check, CreditCard } from "lucide-react";
@@ -26,10 +27,10 @@ const PaymentOptions = () => {
     {
       id: "2-months",
       title: "2 Months Payment", 
-      amount: 200,
-      description: "Pay for two months (TEST)",
+      amount: 20000,
+      description: "Pay for two months",
       features: [
-        "₦200 total (TEST PLAN)",
+        "₦20,000 total",
         "Secure payment processing",
         "Instant confirmation", 
         "Pay in advance & secure your spot"
