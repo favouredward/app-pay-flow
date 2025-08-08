@@ -22,7 +22,9 @@ serve(async (req) => {
     const { action, ...payload } = await req.json()
 
     if (action === 'initialize') {
-      const { email, amount, applicationId } = payload
+      const { email, amount, applicationId, months } = payload
+      
+      console.log('Initializing payment:', { email, amount, applicationId, months });
       
       // Initialize payment with Paystack
       const response = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -36,11 +38,17 @@ serve(async (req) => {
           amount: amount * 100, // Convert to kobo
           metadata: {
             applicationId,
+            months,
             custom_fields: [
               {
                 display_name: "Application ID",
                 variable_name: "application_id",
                 value: applicationId
+              },
+              {
+                display_name: "Months",
+                variable_name: "months",
+                value: months.toString()
               }
             ]
           },
@@ -49,6 +57,7 @@ serve(async (req) => {
       })
 
       const paystackData = await response.json()
+      console.log('Paystack response:', paystackData);
       
       if (paystackData.status) {
         // Create payment record
@@ -57,7 +66,7 @@ serve(async (req) => {
           .insert({
             application_id: applicationId,
             amount_paid: amount,
-            months_paid_for: 1,
+            months_paid_for: months,
             payment_reference: `PST_${Date.now()}`,
             paystack_reference: paystackData.data.reference,
             payment_status: 'pending'
@@ -86,6 +95,8 @@ serve(async (req) => {
     if (action === 'verify') {
       const { reference } = payload
       
+      console.log('Verifying payment:', reference);
+      
       // Verify payment with Paystack
       const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
         headers: {
@@ -94,9 +105,11 @@ serve(async (req) => {
       })
 
       const paystackData = await response.json()
+      console.log('Paystack verification response:', paystackData);
       
       if (paystackData.status && paystackData.data.status === 'success') {
         const applicationId = paystackData.data.metadata?.applicationId
+        const months = paystackData.data.metadata?.months || 1
         
         if (applicationId) {
           // Update payment status
@@ -110,6 +123,38 @@ serve(async (req) => {
 
           if (updateError) {
             console.error('Error updating payment:', updateError)
+          }
+
+          // Update application payment status
+          const { data: payments, error: paymentsError } = await supabaseClient
+            .from('payments')
+            .select('*')
+            .eq('application_id', applicationId)
+            .eq('payment_status', 'success')
+
+          if (!paymentsError && payments) {
+            const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount_paid), 0)
+            const monthsPaid = payments.reduce((sum, p) => sum + p.months_paid_for, 0)
+            
+            let paymentStatus = 'unpaid'
+            if (monthsPaid >= 4) {
+              paymentStatus = 'fully_paid'
+            } else if (monthsPaid > 0) {
+              paymentStatus = 'partially_paid'
+            }
+
+            const { error: appUpdateError } = await supabaseClient
+              .from('applications')
+              .update({
+                months_paid: monthsPaid,
+                total_amount_paid: totalPaid,
+                payment_status: paymentStatus
+              })
+              .eq('id', applicationId)
+
+            if (appUpdateError) {
+              console.error('Error updating application:', appUpdateError)
+            }
           }
         }
 

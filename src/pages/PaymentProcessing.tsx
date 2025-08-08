@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, CreditCard, Smartphone, Building, DollarSign, Shield } from "lucide-react";
@@ -11,18 +10,29 @@ import Footer from "@/components/Footer";
 const PaymentProcessing = () => {
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [applicationData, setApplicationData] = useState<any>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const planData = sessionStorage.getItem("selectedPlan");
     const email = sessionStorage.getItem("userEmail");
+    const storedApplicationData = sessionStorage.getItem("applicationData");
     
-    if (!planData || !email) {
+    if (!planData || !email || !storedApplicationData) {
+      console.error("Missing required data:", { planData: !!planData, email: !!email, storedApplicationData: !!storedApplicationData });
+      toast.error("Missing application data. Please start from the beginning.");
       navigate("/");
       return;
     }
     
-    setSelectedPlan(JSON.parse(planData));
+    try {
+      setSelectedPlan(JSON.parse(planData));
+      setApplicationData(JSON.parse(storedApplicationData));
+    } catch (error) {
+      console.error("Error parsing stored data:", error);
+      toast.error("Invalid application data. Please start over.");
+      navigate("/");
+    }
   }, [navigate]);
 
   const handleBack = () => {
@@ -30,19 +40,19 @@ const PaymentProcessing = () => {
   };
 
   const handlePayment = async () => {
-    if (!selectedPlan) return;
+    if (!selectedPlan || !applicationData) {
+      toast.error("Missing payment or application data");
+      return;
+    }
 
     setIsProcessing(true);
     
     try {
       const email = sessionStorage.getItem("userEmail");
-      const applicationData = sessionStorage.getItem("applicationData");
       
-      if (!email || !applicationData) {
-        throw new Error("Missing application data");
+      if (!email) {
+        throw new Error("Missing user email");
       }
-
-      const parsedApplicationData = JSON.parse(applicationData);
       
       // Initialize payment with Paystack
       const { data, error } = await supabase.functions.invoke('process-payment', {
@@ -50,7 +60,8 @@ const PaymentProcessing = () => {
           action: 'initialize',
           email: email,
           amount: selectedPlan.amount,
-          applicationId: parsedApplicationData.id
+          applicationId: applicationData.id,
+          months: selectedPlan.months
         }
       });
 
@@ -96,7 +107,7 @@ const PaymentProcessing = () => {
     }
   ];
 
-  if (!selectedPlan) {
+  if (!selectedPlan || !applicationData) {
     return (
       <div className="min-h-screen flex flex-col">
         <div className="flex-1 payment-container">
@@ -144,11 +155,11 @@ const PaymentProcessing = () => {
                 <div className="space-y-4">
                   <div className="flex justify-between">
                     <span>Applicant</span>
-                    <span className="font-medium">Favour Edward</span>
+                    <span className="font-medium">{applicationData.full_name}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Email</span>
-                    <span className="font-medium">favouredward2511@gmail.com</span>
+                    <span className="font-medium">{applicationData.email}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Payment For</span>

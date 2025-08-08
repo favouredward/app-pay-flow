@@ -1,122 +1,132 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, ArrowRight, Shield, ExternalLink } from "lucide-react";
+import { Mail, ArrowRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import Footer from "@/components/Footer";
 
 const EmailVerification = () => {
   const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const navigate = useNavigate();
 
-  const handleVerifyEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) {
+  const handleVerifyEmail = async () => {
+    if (!email) {
       toast.error("Please enter your email address");
       return;
     }
 
-    setIsLoading(true);
+    setIsVerifying(true);
     
     try {
-      // TODO: Implement Supabase email verification
-      // For now, simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Fetch application by email
+      const { data: applications, error } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('email', email.toLowerCase().trim())
+        .limit(1);
+
+      if (error) {
+        console.error("Database error:", error);
+        toast.error("Failed to verify email");
+        return;
+      }
+
+      if (!applications || applications.length === 0) {
+        toast.error("No application found with this email address");
+        return;
+      }
+
+      const applicationData = applications[0];
       
-      // Store email in sessionStorage for next page
+      // Store both email and application data in sessionStorage
       sessionStorage.setItem("userEmail", email);
-      
-      // Navigate to application details
-      navigate("/application-details");
+      sessionStorage.setItem("applicationData", JSON.stringify(applicationData));
       
       toast.success("Email verified successfully!");
+      navigate("/application-details");
+      
     } catch (error) {
-      toast.error("Email not found. Please check your email address.");
+      console.error("Verification error:", error);
+      toast.error("Email verification failed");
     } finally {
-      setIsLoading(false);
+      setIsVerifying(false);
     }
   };
 
   return (
-    <div className="payment-container">
-      <div className="payment-card animate-fade-in">
-        <div className="payment-header">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Mail className="w-8 h-8 text-primary" />
-          </div>
-          <h1 className="payment-title">Payment Portal</h1>
-          <p className="payment-subtitle">
-            Enter your email to access payment options
-          </p>
-        </div>
-
-        <form onSubmit={handleVerifyEmail} className="space-y-6">
-          <div className="form-group">
-            <label htmlFor="email" className="form-label">
-              Email Address
-            </label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email address"
-              className="form-input"
-              required
-            />
+    <div className="min-h-screen flex flex-col">
+      <div className="flex-1 payment-container">
+        <div className="w-full max-w-md mx-auto p-4 space-y-6">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Email Verification</h1>
+            <p className="text-muted-foreground">
+              Enter your email to verify your application and proceed with payment
+            </p>
           </div>
 
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="btn-primary"
-          >
-            {isLoading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Verifying...
-              </>
-            ) : (
-              <>
-                Verify Email
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </Button>
-        </form>
+          <Card className="animate-slide-up">
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+                    Email Address
+                  </label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter your email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full"
+                    disabled={isVerifying}
+                  />
+                </div>
+                
+                <Button
+                  onClick={handleVerifyEmail}
+                  disabled={isVerifying || !email}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  {isVerifying ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      Verify Email
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-        <div className="info-box mt-6">
-          <p className="font-medium mb-1">Don't have an application yet?</p>
-          <p className="text-sm opacity-90 mb-3">
-            If you haven't submitted your application, please complete it first before making any payments.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={() => window.open('#', '_blank')}
-          >
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Go to Application Portal
-          </Button>
-        </div>
-
-        <div className="mt-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Need help? Contact us at{" "}
-            <a href="mailto:support@yourdomain.com" className="text-primary hover:underline">
-              support@yourdomain.com
-            </a>
-          </p>
-        </div>
-
-        <div className="security-note">
-          <Shield className="w-4 h-4" />
-          Your payment information is secured with 256-bit SSL encryption
+          <div className="bg-info/10 border border-info/20 rounded-lg p-4 animate-slide-up" style={{animationDelay: '0.1s'}}>
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-info-foreground mb-1">
+                  Do you have an application yet?
+                </p>
+                <p className="text-xs text-info-foreground/80">
+                  If you haven't submitted an application yet, please contact support to get started with your BlacTech training program.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };
