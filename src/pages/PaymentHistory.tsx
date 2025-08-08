@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Calendar, CreditCard, CheckCircle } from "lucide-react";
@@ -27,12 +26,6 @@ const PaymentHistory = () => {
       try {
         const parsedApplicationData = JSON.parse(storedApplicationData);
         setApplicationData(parsedApplicationData);
-
-        // Set current user email for RLS
-        await supabase.rpc('set_config', {
-          parameter: 'app.current_user_email',
-          value: email
-        });
 
         // Fetch payments for this application
         const { data: payments, error } = await supabase
