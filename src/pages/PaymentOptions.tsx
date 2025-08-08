@@ -14,10 +14,10 @@ const PaymentOptions = () => {
     {
       id: "1-month",
       title: "1 Month Payment",
-      amount: 10000,
+      amount: 100,
       description: "Pay for one month",
       features: [
-        "₦10,000 per month",
+        "₦100 per month",
         "Secure payment processing", 
         "Instant confirmation"
       ],
@@ -27,10 +27,10 @@ const PaymentOptions = () => {
     {
       id: "2-months",
       title: "2 Months Payment", 
-      amount: 20000,
+      amount: 200,
       description: "Pay for two months",
       features: [
-        "₦20,000 total",
+        "₦200 total",
         "Secure payment processing",
         "Instant confirmation", 
         "Pay in advance & secure your spot"
@@ -41,30 +41,16 @@ const PaymentOptions = () => {
     {
       id: "4-months",
       title: "4 Months Payment",
-      amount: 40000,
+      amount: 400,
       description: "Pay remaining 4 months",
       features: [
-        "₦10,000 per month",
+        "₦100 per month",
         "Secure payment processing",
         "Instant confirmation",
         "Pay in advance & secure your spot"
       ],
       recommended: true,
       months: 4
-    },
-    {
-      id: "test-plan",
-      title: "Test Payment",
-      amount: 100,
-      description: "For testing purposes only",
-      features: [
-        "₦100 total (TEST ONLY)",
-        "Secure payment processing",
-        "Instant confirmation",
-        "Perfect for testing"
-      ],
-      recommended: false,
-      months: 1
     }
   ];
 
@@ -108,14 +94,14 @@ const PaymentOptions = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Remaining</p>
-                  <p className="text-2xl font-bold text-primary">₦40,000</p>
+                  <p className="text-2xl font-bold text-primary">₦400</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Payment Plans Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
             {paymentPlans.map((plan, index) => (
               <Card 
                 key={plan.id}

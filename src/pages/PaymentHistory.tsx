@@ -28,6 +28,8 @@ const PaymentHistory = () => {
         const parsedApplicationData = JSON.parse(storedApplicationData);
         setApplicationData(parsedApplicationData);
 
+        console.log('Fetching payments for application:', parsedApplicationData.id);
+
         // Fetch ALL payments for this application (including pending and failed)
         const { data: payments, error } = await supabase
           .from('payments')
@@ -70,7 +72,7 @@ const PaymentHistory = () => {
     .filter(p => p.payment_status === 'success')
     .reduce((sum, p) => sum + Number(p.amount_paid), 0);
 
-  const remainingBalance = 40000 - totalPaid;
+  const remainingBalance = 400 - totalPaid; // Updated to reflect new total of ₦400
 
   const getPaymentIcon = (status: string) => {
     switch (status) {
@@ -87,24 +89,24 @@ const PaymentHistory = () => {
   const getPaymentColor = (status: string) => {
     switch (status) {
       case 'success':
-        return 'text-success';
+        return 'text-green-600';
       case 'failed':
-        return 'text-destructive';
+        return 'text-red-600';
       case 'pending':
       default:
-        return 'text-warning';
+        return 'text-yellow-600';
     }
   };
 
   const getPaymentBgColor = (status: string) => {
     switch (status) {
       case 'success':
-        return 'bg-success/10';
+        return 'bg-green-100';
       case 'failed':
-        return 'bg-destructive/10';
+        return 'bg-red-100';
       case 'pending':
       default:
-        return 'bg-warning/10';
+        return 'bg-yellow-100';
     }
   };
 
@@ -134,6 +136,8 @@ const PaymentHistory = () => {
       </div>
     );
   }
+
+  const hasSuccessfulPayments = paymentHistory.some(p => p.payment_status === 'success');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -166,7 +170,7 @@ const PaymentHistory = () => {
                   <div className="text-sm text-muted-foreground">Successful Payments</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-success">₦{totalPaid.toLocaleString()}</div>
+                  <div className="text-2xl font-bold text-green-600">₦{totalPaid.toLocaleString()}</div>
                   <div className="text-sm text-muted-foreground">Total Paid</div>
                 </div>
                 <div className="text-center">
@@ -195,6 +199,7 @@ const PaymentHistory = () => {
             </Card>
           ) : (
             <div className="space-y-4">
+              <h2 className="text-xl font-semibold mb-4">Transaction History</h2>
               {paymentHistory.map((payment, index) => {
                 const PaymentIcon = getPaymentIcon(payment.payment_status);
                 return (
@@ -225,8 +230,8 @@ const PaymentHistory = () => {
                         </div>
                         <div className="text-right">
                           <div className={`font-bold ${
-                            payment.payment_status === 'success' ? 'text-success' : 
-                            payment.payment_status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
+                            payment.payment_status === 'success' ? 'text-green-600' : 
+                            payment.payment_status === 'failed' ? 'text-red-600' : 'text-yellow-600'
                           }`}>
                             ₦{Number(payment.amount_paid).toLocaleString()}
                           </div>
@@ -235,7 +240,7 @@ const PaymentHistory = () => {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDownloadReceipt(payment)}
-                              className="text-primary hover:text-primary/80"
+                              className="text-primary hover:text-primary/80 mt-1"
                             >
                               <Download className="w-4 h-4 mr-1" />
                               Receipt
@@ -250,13 +255,26 @@ const PaymentHistory = () => {
             </div>
           )}
 
-          {/* Action Button - Only show if there are successful payments or no payments at all */}
-          {(paymentHistory.length === 0 || paymentHistory.some(p => p.payment_status === 'success')) && (
+          {/* Action Button - Only show if balance remaining */}
+          {remainingBalance > 0 && (
             <div className="text-center">
               <Button onClick={handleMakePayment} className="btn-primary">
-                {paymentHistory.filter(p => p.payment_status === 'success').length > 0 ? "Make Another Payment" : "Make Your First Payment"}
+                {hasSuccessfulPayments ? "Make Another Payment" : "Make Your First Payment"}
               </Button>
             </div>
+          )}
+
+          {/* Show completion message if fully paid */}
+          {remainingBalance <= 0 && (
+            <Card className="animate-slide-up bg-green-50 border-green-200">
+              <CardContent className="p-6 text-center">
+                <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-green-800 mb-2">Payment Complete!</h3>
+                <p className="text-green-700">
+                  Congratulations! You have completed all payments for the program.
+                </p>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
