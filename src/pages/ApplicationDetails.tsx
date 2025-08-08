@@ -258,13 +258,13 @@ const ApplicationDetails = () => {
           </Card>
 
           {/* Email Verification Success Alert */}
-          <div className="bg-success/10 border border-success/20 rounded-lg p-4 animate-slide-up" style={{animationDelay: '0.3s'}}>
+          <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 animate-slide-up" style={{animationDelay: '0.3s'}}>
             <div className="flex items-center justify-between">
               <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+                <CheckCircle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium text-success-foreground">Email Verified!</p>
-                  <p className="text-sm text-success-foreground/80">Your application has been found. Proceed with your payment options.</p>
+                  <p className="font-medium text-primary">Email Verified!</p>
+                  <p className="text-sm text-foreground">Your application has been found. Proceed with your payment options.</p>
                 </div>
               </div>
             </div>
