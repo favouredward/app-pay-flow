@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, ArrowRight, CheckCircle } from "lucide-react";
+import { Mail, ArrowRight, CheckCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import Footer from "@/components/Footer";
 const EmailVerification = () => {
   const [email, setEmail] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showApplyButton, setShowApplyButton] = useState(false);
   const navigate = useNavigate();
 
   const handleVerifyEmail = async () => {
@@ -21,6 +22,7 @@ const EmailVerification = () => {
     }
 
     setIsVerifying(true);
+    setShowApplyButton(false);
     
     try {
       console.log('Verifying email:', email);
@@ -42,6 +44,7 @@ const EmailVerification = () => {
 
       if (!applications || applications.length === 0) {
         toast.error("No application found with this email address");
+        setShowApplyButton(true);
         return;
       }
 
@@ -61,6 +64,10 @@ const EmailVerification = () => {
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const handleApplyNow = () => {
+    window.open("https://apply.blactechafrica.com", "_blank");
   };
 
   return (
@@ -112,6 +119,22 @@ const EmailVerification = () => {
                     </>
                   )}
                 </Button>
+
+                {showApplyButton && (
+                  <div className="space-y-3 pt-4 border-t">
+                    <Button
+                      onClick={handleApplyNow}
+                      variant="outline"
+                      className="w-full border-primary text-primary hover:bg-primary/10"
+                    >
+                      Apply Now
+                      <ExternalLink className="w-4 h-4 ml-2" />
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      After submitting your application, please return here to complete your payment.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
