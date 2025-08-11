@@ -30,6 +30,9 @@ const PaymentHistory = () => {
 
         console.log('Fetching payments for application:', parsedApplicationData.id);
 
+        // Set user email for RLS
+        await supabase.rpc('set_user_email', { email: email });
+
         // Fetch ALL payments for this application (including pending and failed)
         const { data: payments, error } = await supabase
           .from('payments')
@@ -43,6 +46,19 @@ const PaymentHistory = () => {
         } else {
           console.log('Fetched payments:', payments);
           setPaymentHistory(payments || []);
+        }
+
+        // Also fetch updated application data to get latest payment status
+        const { data: updatedApp, error: appError } = await supabase
+          .from('applications')
+          .select('*')
+          .eq('id', parsedApplicationData.id)
+          .single();
+
+        if (!appError && updatedApp) {
+          setApplicationData(updatedApp);
+          // Update session storage with latest data
+          sessionStorage.setItem("applicationData", JSON.stringify(updatedApp));
         }
       } catch (error) {
         console.error('Error:', error);
@@ -72,7 +88,7 @@ const PaymentHistory = () => {
     .filter(p => p.payment_status === 'success')
     .reduce((sum, p) => sum + Number(p.amount_paid), 0);
 
-  const remainingBalance = 400 - totalPaid; // Updated to reflect new total of ₦400
+  const remainingBalance = 400 - totalPaid;
 
   const getPaymentIcon = (status: string) => {
     switch (status) {
@@ -137,6 +153,7 @@ const PaymentHistory = () => {
     );
   }
 
+  const hasAnyPayments = paymentHistory.length > 0;
   const hasSuccessfulPayments = paymentHistory.some(p => p.payment_status === 'success');
 
   return (
@@ -182,7 +199,7 @@ const PaymentHistory = () => {
           </Card>
 
           {/* Payment History */}
-          {paymentHistory.length === 0 ? (
+          {!hasAnyPayments ? (
             <Card className="animate-slide-up" style={{animationDelay: '0.1s'}}>
               <CardContent className="p-12 text-center">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
@@ -255,17 +272,17 @@ const PaymentHistory = () => {
             </div>
           )}
 
-          {/* Action Button - Only show if balance remaining */}
-          {remainingBalance > 0 && (
+          {/* Action Button - Only show if balance remaining and no duplicate logic */}
+          {remainingBalance > 0 && hasAnyPayments && (
             <div className="text-center">
               <Button onClick={handleMakePayment} className="btn-primary">
-                {hasSuccessfulPayments ? "Make Another Payment" : "Make Your First Payment"}
+                Make Another Payment
               </Button>
             </div>
           )}
 
           {/* Show completion message if fully paid */}
-          {remainingBalance <= 0 && (
+          {remainingBalance <= 0 && hasSuccessfulPayments && (
             <Card className="animate-slide-up bg-green-50 border-green-200">
               <CardContent className="p-6 text-center">
                 <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
