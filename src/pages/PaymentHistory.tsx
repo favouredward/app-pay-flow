@@ -29,7 +29,7 @@ const PaymentHistory = () => {
 
         console.log('Fetching payments for application:', parsedApplicationData.id);
 
-        // Fetch ALL payments for this application (including pending and failed)
+        // Fetch payments for this specific application ID
         const { data: payments, error } = await supabase
           .from('payments')
           .select('*')

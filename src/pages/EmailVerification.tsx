@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, ArrowRight, CheckCircle } from "lucide-react";
@@ -22,6 +23,8 @@ const EmailVerification = () => {
     setIsVerifying(true);
     
     try {
+      console.log('Verifying email:', email);
+      
       // Fetch application by email
       const { data: applications, error } = await supabase
         .from('applications')
@@ -35,12 +38,15 @@ const EmailVerification = () => {
         return;
       }
 
+      console.log('Found applications:', applications);
+
       if (!applications || applications.length === 0) {
         toast.error("No application found with this email address");
         return;
       }
 
       const applicationData = applications[0];
+      console.log('Application data:', applicationData);
       
       // Store both email and application data in sessionStorage
       sessionStorage.setItem("userEmail", email);
