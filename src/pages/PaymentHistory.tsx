@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Calendar, CreditCard, CheckCircle, XCircle, Clock } from "lucide-react";
@@ -29,9 +28,6 @@ const PaymentHistory = () => {
         setApplicationData(parsedApplicationData);
 
         console.log('Fetching payments for application:', parsedApplicationData.id);
-
-        // Set user email for RLS
-        await supabase.rpc('set_user_email', { email: email });
 
         // Fetch ALL payments for this application (including pending and failed)
         const { data: payments, error } = await supabase
