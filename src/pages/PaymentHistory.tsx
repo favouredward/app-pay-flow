@@ -84,7 +84,7 @@ const PaymentHistory = () => {
     .filter(p => p.payment_status === 'success')
     .reduce((sum, p) => sum + Number(p.amount_paid), 0);
 
-  const remainingBalance = 400 - totalPaid;
+  const remainingBalance = 40000 - totalPaid;
 
   const getPaymentIcon = (status: string) => {
     switch (status) {

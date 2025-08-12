@@ -25,13 +25,13 @@ const Footer = () => {
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
                 <Mail className="w-4 h-4 text-primary flex-shrink-0" />
-                <a href="mailto:support@blactech.com" className="text-sm hover:underline">
-                  support@blactech.com
+                <a href="mailto:support@blactechafrica.com" className="text-sm hover:underline">
+                  support@blactechafrica.com
                 </a>
               </div>
               <div className="flex items-center gap-3 text-muted-foreground">
                 <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-                <span className="text-sm">+234 123 456 7890</span>
+                <span className="text-sm">+2349067090883</span>
               </div>
               <div className="flex items-center gap-3 text-muted-foreground">
                 <Clock className="w-4 h-4 text-primary flex-shrink-0" />
