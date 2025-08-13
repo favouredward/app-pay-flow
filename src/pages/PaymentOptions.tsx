@@ -1,14 +1,57 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, Check, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import Footer from "@/components/Footer";
 
 const PaymentOptions = () => {
   const [selectedPlan, setSelectedPlan] = useState("1-month");
+  const [applicationData, setApplicationData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchApplicationData = async () => {
+      const storedApplicationData = sessionStorage.getItem("applicationData");
+      
+      if (!storedApplicationData) {
+        navigate("/");
+        return;
+      }
+
+      try {
+        const parsedApplicationData = JSON.parse(storedApplicationData);
+        
+        // Fetch updated application data to get latest payment status
+        const { data: updatedApp, error } = await supabase
+          .from('applications')
+          .select('*')
+          .eq('id', parsedApplicationData.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching application:', error);
+          toast.error('Failed to load application data');
+          setApplicationData(parsedApplicationData);
+        } else {
+          setApplicationData(updatedApp);
+          // Update session storage with latest data
+          sessionStorage.setItem("applicationData", JSON.stringify(updatedApp));
+        }
+      } catch (error) {
+        console.error('Error parsing application data:', error);
+        navigate("/");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchApplicationData();
+  }, [navigate]);
 
   const paymentPlans = [
     {
@@ -121,6 +164,44 @@ const PaymentOptions = () => {
       : 'bg-muted text-muted-foreground';
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <div className="flex-1 payment-container">
+          <div className="payment-card">
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!applicationData) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <div className="flex-1 payment-container">
+          <div className="payment-card">
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Unable to load application data</p>
+              <Button onClick={() => navigate("/")} className="mt-4">
+                Go Back
+              </Button>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  const monthsPaid = applicationData.months_paid || 0;
+  const totalPaid = Number(applicationData.total_amount_paid) || 0;
+  const remainingAmount = 40000 - totalPaid;
+  const remainingMonths = 4 - monthsPaid;
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 payment-container">
@@ -147,11 +228,23 @@ const PaymentOptions = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-foreground mb-1">Payment Progress</h3>
-                  <p className="text-sm text-muted-foreground">0 of 4 months completed</p>
+                  <p className="text-sm text-muted-foreground">
+                    {monthsPaid} of 4 months completed
+                  </p>
+                  {totalPaid > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Total paid: ₦{totalPaid.toLocaleString()}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Remaining</p>
-                  <p className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">₦40,000</p>
+                  <p className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                    ₦{remainingAmount.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {remainingMonths} months left
+                  </p>
                 </div>
               </div>
             </CardContent>
