@@ -11,6 +11,7 @@ import Footer from "@/components/Footer";
 const PaymentSuccess = () => {
   const [paymentData, setPaymentData] = useState<any>(null);
   const [isVerifying, setIsVerifying] = useState(true);
+  const [verificationComplete, setVerificationComplete] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -18,13 +19,18 @@ const PaymentSuccess = () => {
     const verifyPayment = async () => {
       const reference = searchParams.get('reference');
       
+      console.log('Payment success page loaded with reference:', reference);
+      
       if (!reference) {
+        console.error("Missing payment reference");
         toast.error("Missing payment reference");
-        navigate("/");
+        setTimeout(() => navigate("/"), 3000);
         return;
       }
 
       try {
+        console.log('Starting payment verification...');
+        
         // Verify payment with our edge function
         const { data, error } = await supabase.functions.invoke('process-payment', {
           body: {
@@ -33,7 +39,10 @@ const PaymentSuccess = () => {
           }
         });
 
+        console.log('Verification response:', { data, error });
+
         if (error) {
+          console.error('Verification error:', error);
           throw new Error(error.message || 'Payment verification failed');
         }
 
@@ -41,28 +50,42 @@ const PaymentSuccess = () => {
           const selectedPlan = sessionStorage.getItem("selectedPlan");
           const userEmail = sessionStorage.getItem("userEmail");
           
+          console.log('Payment verified successfully');
+          
           if (!selectedPlan || !userEmail) {
-            navigate("/");
-            return;
+            console.warn('Missing session data, but payment was successful');
           }
 
           setPaymentData({
-            plan: JSON.parse(selectedPlan),
-            email: userEmail,
+            plan: selectedPlan ? JSON.parse(selectedPlan) : { title: 'Monthly Payment', amount: data.data.amount / 100 },
+            email: userEmail || 'N/A',
             reference: reference,
             timestamp: new Date().toLocaleString(),
             transactionId: data.data.id,
             amount: data.data.amount / 100 // Convert from kobo
           });
           
+          setVerificationComplete(true);
           toast.success("Payment verified successfully!");
+
+          // Redirect to payment history after 3 seconds
+          setTimeout(() => {
+            console.log('Redirecting to payment history...');
+            navigate("/payment-history");
+          }, 3000);
+
         } else {
-          throw new Error("Payment verification failed");
+          throw new Error(data.message || "Payment verification failed");
         }
       } catch (error) {
         console.error("Payment verification error:", error);
         toast.error(error instanceof Error ? error.message : "Payment verification failed");
-        navigate("/");
+        
+        // Redirect to home after 3 seconds on error
+        setTimeout(() => {
+          console.log('Redirecting to home due to error...');
+          navigate("/");
+        }, 3000);
       } finally {
         setIsVerifying(false);
       }
@@ -72,7 +95,6 @@ const PaymentSuccess = () => {
   }, [navigate, searchParams]);
 
   const handleDownloadReceipt = () => {
-    // TODO: Generate PDF receipt
     toast.info("Receipt download feature coming soon!");
   };
 
@@ -89,9 +111,13 @@ const PaymentSuccess = () => {
       <div className="min-h-screen flex flex-col">
         <div className="flex-1 payment-container">
           <div className="payment-card">
-            <div className="flex items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-              <span className="ml-3 text-muted-foreground">Verifying payment...</span>
+              <span className="text-muted-foreground">Verifying payment...</span>
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                Please wait while we confirm your payment with our secure payment processor. 
+                This may take a few moments.
+              </p>
             </div>
           </div>
         </div>
@@ -105,8 +131,16 @@ const PaymentSuccess = () => {
       <div className="min-h-screen flex flex-col">
         <div className="flex-1 payment-container">
           <div className="payment-card">
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="w-12 h-12 text-red-500">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Payment Verification Failed</h2>
+              <p className="text-muted-foreground text-center">
+                We couldn't verify your payment. You will be redirected to the home page shortly.
+              </p>
             </div>
           </div>
         </div>
@@ -128,6 +162,11 @@ const PaymentSuccess = () => {
             <p className="text-muted-foreground">
               Your payment has been processed and verified successfully
             </p>
+            {verificationComplete && (
+              <p className="text-sm text-primary mt-2">
+                You will be redirected to your payment history in a few seconds...
+              </p>
+            )}
           </div>
 
           {/* Payment Details Card */}
@@ -225,8 +264,8 @@ const PaymentSuccess = () => {
           <div className="text-center pt-6 border-t animate-slide-up" style={{animationDelay: '0.3s'}}>
             <p className="text-sm text-muted-foreground">
               Need help? Contact us at{" "}
-              <a href="mailto:support@blactech.com" className="text-primary hover:underline">
-                support@blactech.com
+              <a href="mailto:support@blactechafrica.com" className="text-primary hover:underline">
+                support@blactechafrica.com
               </a>
             </p>
             <p className="text-xs text-muted-foreground mt-2">
