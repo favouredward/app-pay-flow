@@ -9,7 +9,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
       headers: corsHeaders,
@@ -25,23 +24,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    let requestBody;
-    try {
-      requestBody = await req.json();
-    } catch (error) {
-      console.error('Error parsing request body:', error);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Invalid JSON in request body' 
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400 
-        }
-      );
-    }
-
+    const requestBody = await req.json();
     const { action, ...payload } = requestBody;
     console.log('Action:', action, 'Payload:', payload);
 
@@ -65,19 +48,23 @@ serve(async (req) => {
         );
       }
       
-      // Get the origin from the request headers with better fallback logic
+      // Generate a unique reference that's consistent and trackable
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substr(2, 9);
+      const paymentReference = `BLAC_${timestamp}_${randomId}`;
+      
+      console.log('Generated payment reference:', paymentReference);
+      
+      // Get callback URL with proper origin handling
       const origin = req.headers.get('origin') || 
                     req.headers.get('referer')?.split('/').slice(0, 3).join('/') || 
                     'https://payment.blactechafrica.com';
       
-      console.log('Using callback origin:', origin);
-      
-      // Generate a unique reference
-      const paymentReference = `BLAC_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const callbackUrl = `${origin}/payment-success?reference=${paymentReference}`;
+      console.log('Using callback URL:', callbackUrl);
       
       try {
         // Create payment record first as pending
-        console.log('Creating payment record...');
         const { error: paymentError } = await supabaseClient
           .from('payments')
           .insert({
@@ -85,8 +72,9 @@ serve(async (req) => {
             amount_paid: amount,
             months_paid_for: months,
             payment_reference: paymentReference,
-            paystack_reference: paymentReference, // Will be updated with actual Paystack reference
-            payment_status: 'pending'
+            paystack_reference: paymentReference,
+            payment_status: 'pending',
+            created_at: new Date().toISOString()
           });
 
         if (paymentError) {
@@ -94,13 +82,14 @@ serve(async (req) => {
           throw new Error('Failed to create payment record: ' + paymentError.message);
         }
 
-        console.log('Payment record created successfully');
+        console.log('Payment record created with reference:', paymentReference);
 
         // Initialize payment with Paystack
         const paystackPayload = {
           email,
           amount: amount * 100, // Convert to kobo
           reference: paymentReference,
+          callback_url: callbackUrl,
           metadata: {
             applicationId,
             months,
@@ -109,7 +98,7 @@ serve(async (req) => {
               {
                 display_name: "Application ID",
                 variable_name: "application_id",
-                value: applicationId
+                value: applicationId.toString()
               },
               {
                 display_name: "Months",
@@ -117,11 +106,10 @@ serve(async (req) => {
                 value: months.toString()
               }
             ]
-          },
-          callback_url: `${origin}/payment-success?reference=${paymentReference}`
+          }
         };
 
-        console.log('Sending to Paystack:', JSON.stringify(paystackPayload, null, 2));
+        console.log('Paystack payload:', JSON.stringify(paystackPayload, null, 2));
 
         const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
           method: 'POST',
@@ -132,23 +120,15 @@ serve(async (req) => {
           body: JSON.stringify(paystackPayload),
         });
 
-        console.log('Paystack response status:', paystackResponse.status);
-
-        if (!paystackResponse.ok) {
-          const errorText = await paystackResponse.text();
-          console.error('Paystack API error:', errorText);
-          throw new Error(`Paystack API error: ${paystackResponse.status} - ${errorText}`);
-        }
-
         const paystackData = await paystackResponse.json();
-        console.log('Paystack success response:', paystackData);
+        console.log('Paystack response:', paystackData);
         
-        if (paystackData.status && paystackData.data) {
-          // Update payment record with actual Paystack reference
+        if (paystackResponse.ok && paystackData.status && paystackData.data) {
+          // Update payment record with Paystack reference
           const { error: updateError } = await supabaseClient
             .from('payments')
             .update({ 
-              paystack_reference: paystackData.data.reference || paymentReference 
+              paystack_reference: paystackData.data.reference 
             })
             .eq('payment_reference', paymentReference);
 
@@ -187,6 +167,20 @@ serve(async (req) => {
       
       console.log('Verifying payment with reference:', reference);
       
+      if (!reference) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            verified: false,
+            error: 'Payment reference is required' 
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400 
+          }
+        );
+      }
+      
       const paystackKey = Deno.env.get('PAYSTACK_SECRET_KEY');
       if (!paystackKey) {
         console.error('PAYSTACK_SECRET_KEY not found');
@@ -203,8 +197,7 @@ serve(async (req) => {
       }
       
       try {
-        // First check if we have this payment in our database
-        console.log('Checking payment record in database...');
+        // Get payment record from database
         const { data: paymentRecord, error: paymentError } = await supabaseClient
           .from('payments')
           .select('*')
@@ -228,7 +221,7 @@ serve(async (req) => {
 
         console.log('Found payment record:', paymentRecord);
 
-        // If already successful, return success
+        // If already successful, return success immediately
         if (paymentRecord.payment_status === 'success') {
           console.log('Payment already verified as successful');
           return new Response(
@@ -238,8 +231,9 @@ serve(async (req) => {
               data: {
                 id: paymentRecord.id,
                 amount: paymentRecord.amount_paid * 100,
-                reference: reference
-              }
+                reference: paymentRecord.paystack_reference || reference
+              },
+              paymentRecord
             }),
             { 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -248,9 +242,9 @@ serve(async (req) => {
           );
         }
 
-        // Verify with Paystack using the actual Paystack reference
+        // Verify with Paystack
         const verifyReference = paymentRecord.paystack_reference || reference;
-        console.log('Verifying with Paystack using reference:', verifyReference);
+        console.log('Verifying with Paystack reference:', verifyReference);
         
         const paystackResponse = await fetch(`https://api.paystack.co/transaction/verify/${verifyReference}`, {
           headers: {
@@ -258,22 +252,11 @@ serve(async (req) => {
           },
         });
 
-        console.log('Paystack verification response status:', paystackResponse.status);
-
-        if (!paystackResponse.ok) {
-          const errorText = await paystackResponse.text();
-          console.error('Paystack verification error:', errorText);
-          throw new Error(`Paystack verification failed: ${paystackResponse.status} - ${errorText}`);
-        }
-
         const paystackData = await paystackResponse.json();
-        console.log('Paystack verification data:', paystackData);
+        console.log('Paystack verification response:', paystackData);
         
-        if (paystackData.status && paystackData.data.status === 'success') {
-          const applicationId = paymentRecord.application_id;
-          const months = paymentRecord.months_paid_for;
-          
-          console.log('Payment verified successfully. Updating records...');
+        if (paystackResponse.ok && paystackData.status && paystackData.data.status === 'success') {
+          console.log('Payment verified successfully with Paystack');
           
           // Update payment status to success
           const { error: updateError } = await supabaseClient
@@ -292,20 +275,19 @@ serve(async (req) => {
 
           console.log('Payment status updated to success');
 
-          // Fetch all successful payments for this application to calculate totals
+          // Update application payment totals
+          const applicationId = paymentRecord.application_id;
+          
+          // Get all successful payments for this application
           const { data: allPayments, error: paymentsError } = await supabaseClient
             .from('payments')
             .select('*')
             .eq('application_id', applicationId)
             .eq('payment_status', 'success');
 
-          if (paymentsError) {
-            console.error('Error fetching payments:', paymentsError);
-          } else if (allPayments) {
+          if (!paymentsError && allPayments) {
             const totalPaid = allPayments.reduce((sum, p) => sum + Number(p.amount_paid), 0);
             const monthsPaid = allPayments.reduce((sum, p) => sum + p.months_paid_for, 0);
-            
-            console.log('Calculated totals:', { totalPaid, monthsPaid });
             
             let paymentStatus = 'unpaid';
             if (monthsPaid >= 4) {
@@ -314,10 +296,9 @@ serve(async (req) => {
               paymentStatus = 'partially_paid';
             }
 
-            console.log('Updating application with status:', paymentStatus);
+            console.log('Updating application:', { totalPaid, monthsPaid, paymentStatus });
 
-            // Update application with payment totals and status
-            const { error: appUpdateError } = await supabaseClient
+            await supabaseClient
               .from('applications')
               .update({
                 months_paid: monthsPaid,
@@ -325,12 +306,6 @@ serve(async (req) => {
                 payment_status: paymentStatus
               })
               .eq('id', applicationId);
-
-            if (appUpdateError) {
-              console.error('Error updating application:', appUpdateError);
-            } else {
-              console.log('Application updated successfully');
-            }
           }
 
           return new Response(
@@ -341,7 +316,8 @@ serve(async (req) => {
                 id: paystackData.data.id,
                 amount: paystackData.data.amount,
                 reference: paystackData.data.reference
-              }
+              },
+              paymentRecord
             }),
             { 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -349,20 +325,16 @@ serve(async (req) => {
             }
           );
         } else {
-          console.log('Payment verification failed or not successful');
+          console.log('Payment verification failed');
           
           // Update payment status to failed
-          const { error: updateError } = await supabaseClient
+          await supabaseClient
             .from('payments')
             .update({ 
               payment_status: 'failed',
               payment_date: new Date().toISOString()
             })
             .eq('id', paymentRecord.id);
-
-          if (updateError) {
-            console.error('Error updating failed payment:', updateError);
-          }
 
           return new Response(
             JSON.stringify({ 

@@ -19,19 +19,21 @@ const PaymentSuccess = () => {
     const verifyPayment = async () => {
       const reference = searchParams.get('reference');
       
-      console.log('Payment success page loaded with reference:', reference);
+      console.log('Payment success page loaded');
+      console.log('URL search params:', Object.fromEntries(searchParams.entries()));
+      console.log('Payment reference from URL:', reference);
       
       if (!reference) {
-        console.error("Missing payment reference");
-        toast.error("Missing payment reference");
+        console.error("Missing payment reference in URL");
+        toast.error("Missing payment reference. Please contact support.");
         setTimeout(() => navigate("/"), 3000);
         return;
       }
 
       try {
-        console.log('Starting payment verification...');
+        console.log('Starting payment verification for reference:', reference);
         
-        // Verify payment with our edge function
+        // Verify payment immediately with our edge function
         const { data, error } = await supabase.functions.invoke('process-payment', {
           body: {
             action: 'verify',
@@ -39,7 +41,7 @@ const PaymentSuccess = () => {
           }
         });
 
-        console.log('Verification response:', { data, error });
+        console.log('Verification response received:', { data, error });
 
         if (error) {
           console.error('Verification error:', error);
@@ -47,34 +49,38 @@ const PaymentSuccess = () => {
         }
 
         if (data.success && data.verified) {
+          console.log('Payment verified successfully');
+          
+          const paymentRecord = data.paymentRecord;
           const selectedPlan = sessionStorage.getItem("selectedPlan");
           const userEmail = sessionStorage.getItem("userEmail");
           
-          console.log('Payment verified successfully');
-          
-          if (!selectedPlan || !userEmail) {
-            console.warn('Missing session data, but payment was successful');
-          }
-
+          // Set payment data for display
           setPaymentData({
-            plan: selectedPlan ? JSON.parse(selectedPlan) : { title: 'Monthly Payment', amount: data.data.amount / 100 },
-            email: userEmail || 'N/A',
+            plan: selectedPlan ? JSON.parse(selectedPlan) : { 
+              title: `${paymentRecord.months_paid_for} Month(s) Payment`, 
+              amount: paymentRecord.amount_paid 
+            },
+            email: userEmail || paymentRecord.application?.email || 'N/A',
             reference: reference,
             timestamp: new Date().toLocaleString(),
             transactionId: data.data.id,
-            amount: data.data.amount / 100 // Convert from kobo
+            amount: paymentRecord.amount_paid,
+            monthsPaid: paymentRecord.months_paid_for
           });
           
           setVerificationComplete(true);
           toast.success("Payment verified successfully!");
 
-          // Redirect to payment history after 3 seconds
+          // Auto-redirect to payment history after 3 seconds
+          console.log('Setting up auto-redirect to payment history in 3 seconds');
           setTimeout(() => {
-            console.log('Redirecting to payment history...');
+            console.log('Auto-redirecting to payment history');
             navigate("/payment-history");
           }, 3000);
 
         } else {
+          console.error('Payment verification failed:', data);
           throw new Error(data.message || "Payment verification failed");
         }
       } catch (error) {
@@ -83,7 +89,7 @@ const PaymentSuccess = () => {
         
         // Redirect to home after 3 seconds on error
         setTimeout(() => {
-          console.log('Redirecting to home due to error...');
+          console.log('Redirecting to home due to verification error');
           navigate("/");
         }, 3000);
       } finally {
@@ -91,6 +97,7 @@ const PaymentSuccess = () => {
       }
     };
 
+    // Start verification immediately
     verifyPayment();
   }, [navigate, searchParams]);
 
@@ -115,8 +122,8 @@ const PaymentSuccess = () => {
               <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
               <span className="text-muted-foreground">Verifying payment...</span>
               <p className="text-sm text-muted-foreground text-center max-w-md">
-                Please wait while we confirm your payment with our secure payment processor. 
-                This may take a few moments.
+                Please wait while we confirm your payment with Paystack. 
+                This should only take a few seconds.
               </p>
             </div>
           </div>
@@ -139,7 +146,10 @@ const PaymentSuccess = () => {
               </div>
               <h2 className="text-xl font-semibold text-foreground">Payment Verification Failed</h2>
               <p className="text-muted-foreground text-center">
-                We couldn't verify your payment. You will be redirected to the home page shortly.
+                We couldn't verify your payment. Please contact support at support@blactechafrica.com
+              </p>
+              <p className="text-sm text-muted-foreground">
+                You will be redirected to the home page shortly.
               </p>
             </div>
           </div>
@@ -164,7 +174,7 @@ const PaymentSuccess = () => {
             </p>
             {verificationComplete && (
               <p className="text-sm text-primary mt-2">
-                You will be redirected to your payment history in a few seconds...
+                Redirecting to your payment history in 3 seconds...
               </p>
             )}
           </div>
@@ -188,8 +198,8 @@ const PaymentSuccess = () => {
                   <span className="font-bold text-success">₦{paymentData.amount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Payment For</span>
-                  <span className="font-medium">{paymentData.plan.title}</span>
+                  <span>Months Paid For</span>
+                  <span className="font-medium">{paymentData.monthsPaid} month(s)</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Payment Date</span>
@@ -210,21 +220,21 @@ const PaymentSuccess = () => {
               
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <Mail className="w-5 h-5 text-primary mt-0.5" />
+                  <CheckCircle className="w-5 h-5 text-success mt-0.5" />
                   <div>
-                    <p className="font-medium">Email Confirmation</p>
+                    <p className="font-medium">Payment Confirmed</p>
                     <p className="text-sm text-muted-foreground">
-                      You'll receive a payment confirmation email within the next few minutes.
+                      Your payment has been verified and your application status updated.
                     </p>
                   </div>
                 </div>
                 
                 <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-primary mt-0.5" />
+                  <Mail className="w-5 h-5 text-primary mt-0.5" />
                   <div>
-                    <p className="font-medium">Payment Recorded</p>
+                    <p className="font-medium">Email Confirmation</p>
                     <p className="text-sm text-muted-foreground">
-                      Your payment has been recorded and your application status has been updated.
+                      You'll receive a payment confirmation email shortly.
                     </p>
                   </div>
                 </div>
@@ -235,20 +245,20 @@ const PaymentSuccess = () => {
           {/* Action Buttons */}
           <div className="space-y-4 animate-slide-up" style={{animationDelay: '0.2s'}}>
             <Button
+              onClick={handleViewPaymentHistory}
+              className="btn-primary w-full"
+            >
+              View Payment History
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            
+            <Button
               onClick={handleDownloadReceipt}
               variant="outline"
               className="w-full"
             >
               <Download className="w-4 h-4 mr-2" />
               Download Receipt
-            </Button>
-            
-            <Button
-              onClick={handleViewPaymentHistory}
-              className="btn-primary w-full"
-            >
-              View Payment History
-              <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             
             <Button
@@ -260,16 +270,17 @@ const PaymentSuccess = () => {
             </Button>
           </div>
 
-          {/* Footer */}
+          {/* Support Info */}
           <div className="text-center pt-6 border-t animate-slide-up" style={{animationDelay: '0.3s'}}>
             <p className="text-sm text-muted-foreground">
               Need help? Contact us at{" "}
               <a href="mailto:support@blactechafrica.com" className="text-primary hover:underline">
                 support@blactechafrica.com
               </a>
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Keep this receipt for your records
+              {" "}or call{" "}
+              <a href="tel:+2349067090883" className="text-primary hover:underline">
+                +2349067090883
+              </a>
             </p>
           </div>
         </div>

@@ -54,6 +54,13 @@ const PaymentProcessing = () => {
         throw new Error("Missing user email");
       }
       
+      console.log('Initiating payment for:', {
+        email,
+        amount: selectedPlan.amount,
+        applicationId: applicationData.id,
+        months: selectedPlan.months
+      });
+      
       // Initialize payment with Paystack
       const { data, error } = await supabase.functions.invoke('process-payment', {
         body: {
@@ -66,14 +73,24 @@ const PaymentProcessing = () => {
       });
 
       if (error) {
+        console.error('Payment initialization error:', error);
         throw new Error(error.message || 'Failed to initialize payment');
       }
 
+      console.log('Payment initialization response:', data);
+
       if (data.success && data.data.authorization_url) {
+        // Store the payment reference for tracking
+        if (data.paymentReference) {
+          sessionStorage.setItem("currentPaymentReference", data.paymentReference);
+          console.log('Stored payment reference:', data.paymentReference);
+        }
+        
         // Redirect to Paystack payment page
+        console.log('Redirecting to Paystack:', data.data.authorization_url);
         window.location.href = data.data.authorization_url;
       } else {
-        throw new Error('Failed to get payment URL');
+        throw new Error(data.message || 'Failed to get payment URL');
       }
       
     } catch (error) {
