@@ -5,101 +5,81 @@ import { CheckCircle, Download, ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import Footer from "@/components/Footer";
+import PaymentVerificationDialog from "@/components/PaymentVerificationDialog";
+import { usePaymentVerification } from "@/hooks/usePaymentVerification";
 
 const PaymentSuccess = () => {
   const [paymentData, setPaymentData] = useState<any>(null);
-  const [isVerifying, setIsVerifying] = useState(true);
   const [verificationComplete, setVerificationComplete] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const {
+    isDialogOpen,
+    paymentReference,
+    openVerificationDialog,
+    closeVerificationDialog,
+    handleVerificationComplete,
+  } = usePaymentVerification(
+    // onSuccess
+    (data) => {
+      console.log('Payment verification successful:', data);
+      
+      const paymentRecord = data.paymentRecord;
+      const selectedPlan = sessionStorage.getItem("selectedPlan");
+      const userEmail = sessionStorage.getItem("userEmail");
+      
+      // Set payment data for display
+      setPaymentData({
+        plan: selectedPlan ? JSON.parse(selectedPlan) : { 
+          title: `${paymentRecord.months_paid_for} Month(s) Payment`, 
+          amount: paymentRecord.amount_paid 
+        },
+        email: userEmail || paymentRecord.application?.email || 'N/A',
+        reference: paymentReference,
+        timestamp: new Date().toLocaleString(),
+        transactionId: data.data.id,
+        amount: paymentRecord.amount_paid,
+        monthsPaid: paymentRecord.months_paid_for
+      });
+      
+      setVerificationComplete(true);
+      toast.success("Payment verified and database updated successfully!");
+
+      // Auto-redirect to payment history after 3 seconds
+      setTimeout(() => {
+        console.log('Auto-redirecting to payment history');
+        navigate("/payment-history");
+      }, 3000);
+    },
+    // onFailure
+    () => {
+      toast.error("Payment verification failed. Please contact support.");
+      setTimeout(() => {
+        console.log('Redirecting to home due to verification error');
+        navigate("/");
+      }, 3000);
+    }
+  );
+
   useEffect(() => {
-    const verifyPayment = async () => {
-      const reference = searchParams.get('reference');
-      
-      console.log('Payment success page loaded');
-      console.log('URL search params:', Object.fromEntries(searchParams.entries()));
-      console.log('Payment reference from URL:', reference);
-      
-      if (!reference) {
-        console.error("Missing payment reference in URL");
-        toast.error("Missing payment reference. Please contact support.");
-        setTimeout(() => navigate("/"), 3000);
-        return;
-      }
+    const reference = searchParams.get('reference');
+    
+    console.log('Payment success page loaded');
+    console.log('URL search params:', Object.fromEntries(searchParams.entries()));
+    console.log('Payment reference from URL:', reference);
+    
+    if (!reference) {
+      console.error("Missing payment reference in URL");
+      toast.error("Missing payment reference. Please contact support.");
+      setTimeout(() => navigate("/"), 3000);
+      return;
+    }
 
-      try {
-        console.log('Starting payment verification for reference:', reference);
-        
-        // Verify payment immediately with our edge function
-        const { data, error } = await supabase.functions.invoke('process-payment', {
-          body: {
-            action: 'verify',
-            reference: reference
-          }
-        });
-
-        console.log('Verification response received:', { data, error });
-
-        if (error) {
-          console.error('Verification error:', error);
-          throw new Error(error.message || 'Payment verification failed');
-        }
-
-        if (data.success && data.verified) {
-          console.log('Payment verified successfully');
-          
-          const paymentRecord = data.paymentRecord;
-          const selectedPlan = sessionStorage.getItem("selectedPlan");
-          const userEmail = sessionStorage.getItem("userEmail");
-          
-          // Set payment data for display
-          setPaymentData({
-            plan: selectedPlan ? JSON.parse(selectedPlan) : { 
-              title: `${paymentRecord.months_paid_for} Month(s) Payment`, 
-              amount: paymentRecord.amount_paid 
-            },
-            email: userEmail || paymentRecord.application?.email || 'N/A',
-            reference: reference,
-            timestamp: new Date().toLocaleString(),
-            transactionId: data.data.id,
-            amount: paymentRecord.amount_paid,
-            monthsPaid: paymentRecord.months_paid_for
-          });
-          
-          setVerificationComplete(true);
-          toast.success("Payment verified successfully!");
-
-          // Auto-redirect to payment history after 3 seconds
-          console.log('Setting up auto-redirect to payment history in 3 seconds');
-          setTimeout(() => {
-            console.log('Auto-redirecting to payment history');
-            navigate("/payment-history");
-          }, 3000);
-
-        } else {
-          console.error('Payment verification failed:', data);
-          throw new Error(data.message || "Payment verification failed");
-        }
-      } catch (error) {
-        console.error("Payment verification error:", error);
-        toast.error(error instanceof Error ? error.message : "Payment verification failed");
-        
-        // Redirect to home after 3 seconds on error
-        setTimeout(() => {
-          console.log('Redirecting to home due to verification error');
-          navigate("/");
-        }, 3000);
-      } finally {
-        setIsVerifying(false);
-      }
-    };
-
-    // Start verification immediately
-    verifyPayment();
-  }, [navigate, searchParams]);
+    // Open verification dialog immediately
+    openVerificationDialog(reference);
+  }, [navigate, searchParams, openVerificationDialog]);
 
   const handleDownloadReceipt = () => {
     toast.info("Receipt download feature coming soon!");
@@ -113,47 +93,32 @@ const PaymentSuccess = () => {
     navigate("/");
   };
 
-  if (isVerifying) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <div className="flex-1 payment-container">
-          <div className="payment-card">
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-              <span className="text-muted-foreground">Verifying payment...</span>
-              <p className="text-sm text-muted-foreground text-center max-w-md">
-                Please wait while we confirm your payment with Paystack. 
-                This should only take a few seconds.
-              </p>
-            </div>
-          </div>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-
   if (!paymentData) {
     return (
       <div className="min-h-screen flex flex-col">
         <div className="flex-1 payment-container">
           <div className="payment-card">
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <div className="w-12 h-12 text-red-500">
+              <div className="w-12 h-12 text-primary">
                 <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-foreground">Payment Verification Failed</h2>
+              <h2 className="text-xl font-semibold text-foreground">Payment Received</h2>
               <p className="text-muted-foreground text-center">
-                We couldn't verify your payment. Please contact support at support@blactechafrica.com
-              </p>
-              <p className="text-sm text-muted-foreground">
-                You will be redirected to the home page shortly.
+                Your payment was successful! We're now verifying it with our database.
               </p>
             </div>
           </div>
         </div>
+        
+        <PaymentVerificationDialog
+          isOpen={isDialogOpen}
+          onClose={closeVerificationDialog}
+          paymentReference={paymentReference}
+          onVerificationComplete={handleVerificationComplete}
+        />
+        
         <Footer />
       </div>
     );
@@ -209,6 +174,10 @@ const PaymentSuccess = () => {
                   <span>Email</span>
                   <span className="font-medium">{paymentData.email}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span>Database Status</span>
+                  <span className="font-medium text-success">✓ Updated</span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -222,9 +191,9 @@ const PaymentSuccess = () => {
                 <div className="flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-success mt-0.5" />
                   <div>
-                    <p className="font-medium">Payment Confirmed</p>
+                    <p className="font-medium">Payment Verified</p>
                     <p className="text-sm text-muted-foreground">
-                      Your payment has been verified and your application status updated.
+                      Your payment has been verified with Paystack and our database updated.
                     </p>
                   </div>
                 </div>
